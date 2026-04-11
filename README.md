@@ -16,6 +16,26 @@ All guards default to **ON**. guardctl also blocks Claude from disabling its own
 
 ## Install
 
+### Download a release binary
+
+Grab the latest binary for your platform from [Releases](https://github.com/lazorgurl/guardctl/releases):
+
+| Platform | Binary |
+|---|---|
+| macOS (Apple Silicon) | `guardctl-macos-arm64` |
+| Linux (x64) | `guardctl-linux-x64` |
+| Windows (x64) | `guardctl-windows-x64.exe` |
+
+```sh
+# Example: macOS arm64
+curl -L https://github.com/lazorgurl/guardctl/releases/latest/download/guardctl-macos-arm64 -o /usr/local/bin/guardctl
+chmod +x /usr/local/bin/guardctl
+```
+
+### Build from source
+
+Requires [Rust](https://rustup.rs/).
+
 ```sh
 git clone https://github.com/lazorgurl/guardctl.git ~/.claude/tools/guardctl
 cd ~/.claude/tools/guardctl
