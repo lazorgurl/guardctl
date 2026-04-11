@@ -1,5 +1,7 @@
+mod audit;
 mod guards;
 mod hook;
+mod init;
 mod state;
 
 use clap::{Parser, Subcommand};
@@ -54,6 +56,29 @@ enum Command {
         /// The directory to clear overrides for
         dir: String,
     },
+    /// Install guardctl hooks into ~/.claude/settings.json
+    Init,
+    /// Dry-run a command/path/tool against guards
+    Test {
+        /// Test against the bash guard
+        #[arg(long)]
+        bash: Option<String>,
+        /// Test against the file-write guard
+        #[arg(long, name = "file-write")]
+        file_write: Option<String>,
+        /// Test against the mcp guard
+        #[arg(long)]
+        mcp: Option<String>,
+    },
+    /// Show recent blocks from the audit log
+    Log {
+        /// Number of entries to show (default: 20)
+        #[arg(short, long, default_value = "20")]
+        count: usize,
+        /// Output as raw JSONL
+        #[arg(long)]
+        json: bool,
+    },
     /// Run a guard check (called by hook shims, reads JSON from stdin)
     Check {
         /// Guard name: "bash", "file-write", or "mcp"
@@ -70,6 +95,9 @@ fn main() {
         Command::Status { dir, global } => cmd_status(resolve_dir(dir, global)),
         Command::List => cmd_list(),
         Command::ClearDir { dir } => cmd_clear_dir(&dir),
+        Command::Init => cmd_init(),
+        Command::Test { bash, file_write, mcp } => cmd_test(bash, file_write, mcp),
+        Command::Log { count, json } => cmd_log(count, json),
         Command::Check { guard } => cmd_check(&guard),
     }
 }
@@ -169,6 +197,81 @@ fn cmd_clear_dir(dir: &str) {
     eprintln!("Cleared all overrides for: {dir}");
 }
 
+fn cmd_init() {
+    if let Err(e) = init::install() {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn cmd_test(bash: Option<String>, file_write: Option<String>, mcp: Option<String>) {
+    let checks: Vec<(&str, serde_json::Value)> = vec![
+        bash.map(|cmd| ("bash", serde_json::json!({"tool_input": {"command": cmd}}))),
+        file_write.map(|path| ("file-write", serde_json::json!({"tool_input": {"file_path": path}}))),
+        mcp.map(|tool| ("mcp", serde_json::json!({"tool_name": tool}))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    if checks.is_empty() {
+        eprintln!("Specify at least one: --bash <cmd>, --file-write <path>, or --mcp <tool>");
+        std::process::exit(1);
+    }
+
+    for (guard_name, input) in &checks {
+        match guards::check(guard_name, input) {
+            Some(reason) => eprintln!("BLOCKED by {guard_name}: {reason}"),
+            None => eprintln!("ALLOWED by {guard_name}"),
+        }
+    }
+}
+
+fn cmd_log(count: usize, json: bool) {
+    let entries = audit::read_recent(count);
+    if entries.is_empty() {
+        eprintln!("No blocks recorded yet.");
+        return;
+    }
+    for entry in &entries {
+        if json {
+            println!("{entry}");
+        } else {
+            let ts = entry.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
+            let guard = entry.get("guard").and_then(|v| v.as_str()).unwrap_or("?");
+            let blocked = entry.get("blocked").and_then(|v| v.as_str()).unwrap_or("?");
+            let reason = entry.get("reason").and_then(|v| v.as_str()).unwrap_or("");
+            let cwd = entry.get("cwd").and_then(|v| v.as_str()).unwrap_or("");
+
+            let time = format_ts(ts);
+            eprintln!("{time}  [{guard}]  {blocked}");
+            if !cwd.is_empty() {
+                eprintln!("  cwd: {cwd}");
+            }
+            eprintln!("  {reason}");
+            eprintln!();
+        }
+    }
+}
+
+fn format_ts(epoch: u64) -> String {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    let time = UNIX_EPOCH + Duration::from_secs(epoch);
+    let elapsed = SystemTime::now()
+        .duration_since(time)
+        .unwrap_or_default();
+    let secs = elapsed.as_secs();
+    if secs < 60 {
+        format!("{secs}s ago")
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h ago", secs / 3600)
+    } else {
+        format!("{}d ago", secs / 86400)
+    }
+}
+
 fn cmd_check(guard_name: &str) {
     if !guards::exists(guard_name) {
         std::process::exit(0);
@@ -200,6 +303,7 @@ fn cmd_check(guard_name: &str) {
 
     match guards::check(guard_name, &input) {
         Some(reason) => {
+            audit::record(guard_name, &reason, cwd.as_deref(), &input);
             print!("{}", hook::deny_json(&reason));
             std::process::exit(0);
         }

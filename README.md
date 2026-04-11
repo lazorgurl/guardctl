@@ -46,6 +46,15 @@ The binary is at `target/release/guardctl`. Add it to your PATH or reference it 
 
 ### Hook setup
 
+```sh
+guardctl init
+```
+
+This merges the required PreToolUse hooks into `~/.claude/settings.json`. It's idempotent — safe to run again.
+
+<details>
+<summary>Manual setup (if you prefer)</summary>
+
 Add to `~/.claude/settings.json`:
 
 ```json
@@ -68,6 +77,7 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
+</details>
 
 ## Usage
 
@@ -90,7 +100,16 @@ guardctl on --global                # Enable all guards globally
 guardctl off --only mcp --global    # Disable one guard globally
 guardctl status --global            # Show global status + all directory overrides
 
+# Testing & debugging
+guardctl test --bash "rm -rf /"     # Dry-run a command against the bash guard
+guardctl test --file-write ".env"   # Dry-run a path against the file-write guard
+guardctl test --mcp "mcp__sentry__update_issue"  # Dry-run an MCP tool name
+guardctl log                        # Show recent blocks
+guardctl log -n 5                   # Show last 5 blocks
+guardctl log --json                 # Raw JSONL output
+
 # Other
+guardctl init                       # Install hooks into settings.json
 guardctl list                       # List available guards
 guardctl clear-dir /path/to/project # Remove all directory overrides
 ```
