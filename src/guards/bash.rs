@@ -70,6 +70,17 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             message: "BLOCKED: shell redirect into Claude config/hooks. Use the Edit tool so the file-write-guard can review.",
             except: None,
         },
+        // --- Guard tampering ---
+        Rule {
+            pattern: Regex::new(r"guardctl\s+off").unwrap(),
+            message: "BLOCKED: only the user can disable guardctl. Ask them to run 'guardctl off' manually.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(>|>>|tee\s|rm\s).*\.guard-state\.json").unwrap(),
+            message: "BLOCKED: direct manipulation of guard state file. Use 'guardctl on/off' (user only).",
+            except: None,
+        },
         // --- Database destruction ---
         Rule {
             pattern: Regex::new(r"(?i)(DROP\s+(TABLE|DATABASE|SCHEMA)|TRUNCATE\s+TABLE)").unwrap(),
@@ -226,6 +237,25 @@ mod tests {
     #[test]
     fn blocks_terraform_destroy() {
         assert!(blocked("terraform destroy -auto-approve"));
+    }
+
+    #[test]
+    fn blocks_guardctl_off() {
+        assert!(blocked("guardctl off"));
+        assert!(blocked("guardctl off --only bash"));
+    }
+
+    #[test]
+    fn allows_guardctl_read() {
+        assert!(!blocked("guardctl status"));
+        assert!(!blocked("guardctl list"));
+        assert!(!blocked("guardctl check bash"));
+    }
+
+    #[test]
+    fn blocks_guard_state_tampering() {
+        assert!(blocked("rm .guard-state.json"));
+        assert!(blocked("echo '{}' > .guard-state.json"));
     }
 
     #[test]

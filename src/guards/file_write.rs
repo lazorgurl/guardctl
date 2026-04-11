@@ -23,6 +23,11 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             pattern: Regex::new(r"\.claude/(settings\.json|hooks/)").unwrap(),
             message: "BLOCKED: modifying Claude config/hooks requires manual confirmation.",
         },
+        // --- Guard tampering ---
+        Rule {
+            pattern: Regex::new(r"\.guard-state\.json$").unwrap(),
+            message: "BLOCKED: only the user can modify guard state. Ask them to run 'guardctl on/off' manually.",
+        },
         // --- Secrets and credentials ---
         Rule {
             pattern: Regex::new(r"(?i)\.(env|pem|key|p12|pfx|jks|keystore)$").unwrap(),
@@ -114,6 +119,11 @@ mod tests {
         assert!(blocked("/app/go.sum"));
         assert!(blocked("/app/package-lock.json"));
         assert!(blocked("/app/yarn.lock"));
+    }
+
+    #[test]
+    fn blocks_guard_state_file() {
+        assert!(blocked("/Users/julia/.claude/hooks/.guard-state.json"));
     }
 
     #[test]
