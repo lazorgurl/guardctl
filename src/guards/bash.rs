@@ -87,19 +87,150 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             message: "BLOCKED: destructive SQL (DROP/TRUNCATE). This is irreversible in production.",
             except: None,
         },
-        // --- Container/infra destruction ---
+        // --- GitHub CLI ---
+        Rule {
+            pattern: Regex::new(r"gh\s+repo\s+delete").unwrap(),
+            message: "BLOCKED: gh repo delete destroys an entire repository. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gh\s+api\s.*-X\s*DELETE").unwrap(),
+            message: "BLOCKED: raw DELETE via gh api. Use a specific gh subcommand or get manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gh\s+release\s+delete").unwrap(),
+            message: "BLOCKED: gh release delete removes a published release. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gh\s+pr\s+close").unwrap(),
+            message: "BLOCKED: closing a PR should be a deliberate human decision.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gh\s+issue\s+close").unwrap(),
+            message: "BLOCKED: closing an issue should be a deliberate human decision.",
+            except: None,
+        },
+        // --- GCP (gcloud) ---
+        Rule {
+            pattern: Regex::new(r"gcloud\s+compute\s+instances\s+delete").unwrap(),
+            message: "BLOCKED: deleting GCP compute instances. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+sql\s+instances\s+delete").unwrap(),
+            message: "BLOCKED: deleting Cloud SQL instances destroys databases. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+run\s+services\s+delete").unwrap(),
+            message: "BLOCKED: deleting Cloud Run services takes down live traffic. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+storage\s+(rm|delete)").unwrap(),
+            message: "BLOCKED: deleting GCP storage objects/buckets. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+projects\s+delete").unwrap(),
+            message: "BLOCKED: deleting a GCP project destroys all resources within it. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+iam\s+service-accounts\s+delete").unwrap(),
+            message: "BLOCKED: deleting service accounts can break running services. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"gcloud\s+.*--quiet\s.*delete|gcloud\s+.*delete\s.*--quiet").unwrap(),
+            message: "BLOCKED: gcloud delete with --quiet skips confirmation. This needs manual confirmation.",
+            except: None,
+        },
+        // --- AWS CLI ---
+        Rule {
+            pattern: Regex::new(r"aws\s+ec2\s+terminate-instances").unwrap(),
+            message: "BLOCKED: terminating EC2 instances. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+rds\s+delete-db-(instance|cluster)").unwrap(),
+            message: "BLOCKED: deleting RDS databases. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+s3\s+(rb|rm)\s").unwrap(),
+            message: "BLOCKED: deleting S3 buckets/objects. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+s3api\s+delete-bucket").unwrap(),
+            message: "BLOCKED: deleting S3 bucket. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+iam\s+delete-(role|user|policy|group)").unwrap(),
+            message: "BLOCKED: deleting IAM resources. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+lambda\s+delete-function").unwrap(),
+            message: "BLOCKED: deleting Lambda functions. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+cloudformation\s+delete-stack").unwrap(),
+            message: "BLOCKED: deleting CloudFormation stacks tears down all stack resources. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+ecs\s+delete-(service|cluster)").unwrap(),
+            message: "BLOCKED: deleting ECS services/clusters. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"aws\s+route53\s+delete-hosted-zone").unwrap(),
+            message: "BLOCKED: deleting Route53 hosted zone destroys DNS records. This needs manual confirmation.",
+            except: None,
+        },
+        // --- Wrangler (Cloudflare Workers) ---
+        Rule {
+            pattern: Regex::new(r"wrangler\s+(delete|d1\s+delete|r2\s+bucket\s+delete|kv:namespace\s+delete|queues\s+delete|secret\s+delete)").unwrap(),
+            message: "BLOCKED: wrangler delete destroys Cloudflare resources. This needs manual confirmation.",
+            except: None,
+        },
+        // --- Docker ---
         Rule {
             pattern: Regex::new(r"docker\s+system\s+prune").unwrap(),
             message: "BLOCKED: docker system prune removes all unused data. Use targeted docker rm/rmi instead.",
             except: None,
         },
         Rule {
+            pattern: Regex::new(r"docker\s+volume\s+(rm|prune)").unwrap(),
+            message: "BLOCKED: removing docker volumes destroys persistent data. This needs manual confirmation.",
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"docker\s+image\s+prune\s+-a").unwrap(),
+            message: "BLOCKED: docker image prune -a removes all unused images. Use targeted docker rmi instead.",
+            except: None,
+        },
+        // --- Terraform ---
+        Rule {
             pattern: Regex::new(r"terraform\s+destroy").unwrap(),
             message: "BLOCKED: terraform destroy tears down infrastructure. This needs manual confirmation.",
             except: None,
         },
         Rule {
-            pattern: Regex::new(r"kubectl\s+delete\s+(namespace|ns|deployment|all)").unwrap(),
+            pattern: Regex::new(r"terraform\s+apply\s.*-auto-approve").unwrap(),
+            message: "BLOCKED: terraform apply -auto-approve skips the plan review. Run 'terraform plan' first, then apply with manual confirmation.",
+            except: None,
+        },
+        // --- kubectl ---
+        Rule {
+            pattern: Regex::new(r"kubectl\s+delete\s+(namespace|ns|deployment|all|pvc|pv|svc|service)").unwrap(),
             message: "BLOCKED: kubectl delete on broad resources. Target specific resources instead.",
             except: None,
         },
@@ -258,11 +389,156 @@ mod tests {
         assert!(blocked("echo '{}' > .guard-state.json"));
     }
 
+    // --- GitHub CLI ---
+
+    #[test]
+    fn blocks_gh_destructive() {
+        assert!(blocked("gh repo delete lazorgurl/foo"));
+        assert!(blocked("gh api -X DELETE /repos/lazorgurl/foo"));
+        assert!(blocked("gh release delete v1.0.0"));
+        assert!(blocked("gh pr close 42"));
+        assert!(blocked("gh issue close 99"));
+    }
+
+    #[test]
+    fn allows_gh_safe() {
+        assert!(!blocked("gh pr create --title foo --body bar"));
+        assert!(!blocked("gh pr view 42"));
+        assert!(!blocked("gh pr list"));
+        assert!(!blocked("gh api repos/lazorgurl/foo/pulls"));
+        assert!(!blocked("gh issue create --title bug"));
+        assert!(!blocked("gh issue list"));
+        assert!(!blocked("gh run list"));
+    }
+
+    // --- GCP ---
+
+    #[test]
+    fn blocks_gcloud_destructive() {
+        assert!(blocked("gcloud compute instances delete my-vm --zone us-central1-a"));
+        assert!(blocked("gcloud sql instances delete my-db"));
+        assert!(blocked("gcloud run services delete my-svc --region us-central1"));
+        assert!(blocked("gcloud storage rm gs://my-bucket/file"));
+        assert!(blocked("gcloud projects delete my-project"));
+        assert!(blocked("gcloud iam service-accounts delete sa@proj.iam.gserviceaccount.com"));
+        assert!(blocked("gcloud compute instances delete my-vm --quiet"));
+    }
+
+    #[test]
+    fn allows_gcloud_safe() {
+        assert!(!blocked("gcloud compute instances list"));
+        assert!(!blocked("gcloud sql instances describe my-db"));
+        assert!(!blocked("gcloud run services list"));
+        assert!(!blocked("gcloud storage ls gs://my-bucket"));
+        assert!(!blocked("gcloud auth print-access-token"));
+        assert!(!blocked("gcloud config get-value project"));
+    }
+
+    // --- Docker ---
+
+    #[test]
+    fn blocks_docker_destructive() {
+        assert!(blocked("docker system prune -a"));
+        assert!(blocked("docker volume rm my-vol"));
+        assert!(blocked("docker volume prune"));
+        assert!(blocked("docker image prune -a"));
+    }
+
+    #[test]
+    fn allows_docker_safe() {
+        assert!(!blocked("docker ps"));
+        assert!(!blocked("docker compose up -d"));
+        assert!(!blocked("docker logs my-container"));
+        assert!(!blocked("docker build -t myimage ."));
+    }
+
+    // --- Terraform ---
+
+    #[test]
+    fn blocks_terraform_destructive() {
+        assert!(blocked("terraform destroy -auto-approve"));
+        assert!(blocked("terraform apply -auto-approve"));
+    }
+
+    #[test]
+    fn allows_terraform_safe() {
+        assert!(!blocked("terraform plan"));
+        assert!(!blocked("terraform apply")); // without -auto-approve is fine (interactive)
+        assert!(!blocked("terraform init"));
+        assert!(!blocked("terraform validate"));
+    }
+
+    // --- AWS CLI ---
+
+    #[test]
+    fn blocks_aws_destructive() {
+        assert!(blocked("aws ec2 terminate-instances --instance-ids i-1234"));
+        assert!(blocked("aws rds delete-db-instance --db-instance-identifier mydb"));
+        assert!(blocked("aws rds delete-db-cluster --db-cluster-identifier mycluster"));
+        assert!(blocked("aws s3 rb s3://my-bucket --force"));
+        assert!(blocked("aws s3 rm s3://my-bucket --recursive"));
+        assert!(blocked("aws s3api delete-bucket --bucket my-bucket"));
+        assert!(blocked("aws iam delete-role --role-name my-role"));
+        assert!(blocked("aws iam delete-user --user-name my-user"));
+        assert!(blocked("aws lambda delete-function --function-name my-fn"));
+        assert!(blocked("aws cloudformation delete-stack --stack-name my-stack"));
+        assert!(blocked("aws ecs delete-service --service my-svc"));
+        assert!(blocked("aws route53 delete-hosted-zone --id Z1234"));
+    }
+
+    #[test]
+    fn allows_aws_safe() {
+        assert!(!blocked("aws ec2 describe-instances"));
+        assert!(!blocked("aws s3 ls"));
+        assert!(!blocked("aws s3 cp file.txt s3://bucket/"));
+        assert!(!blocked("aws rds describe-db-instances"));
+        assert!(!blocked("aws iam list-roles"));
+        assert!(!blocked("aws sts get-caller-identity"));
+    }
+
+    // --- Wrangler ---
+
+    #[test]
+    fn blocks_wrangler_destructive() {
+        assert!(blocked("wrangler delete"));
+        assert!(blocked("wrangler d1 delete my-db"));
+        assert!(blocked("wrangler r2 bucket delete my-bucket"));
+        assert!(blocked("wrangler kv:namespace delete --namespace-id abc"));
+        assert!(blocked("wrangler queues delete my-queue"));
+        assert!(blocked("wrangler secret delete MY_SECRET"));
+    }
+
+    #[test]
+    fn allows_wrangler_safe() {
+        assert!(!blocked("wrangler deploy"));
+        assert!(!blocked("wrangler dev"));
+        assert!(!blocked("wrangler d1 list"));
+        assert!(!blocked("wrangler r2 bucket list"));
+        assert!(!blocked("wrangler tail"));
+    }
+
+    // --- kubectl ---
+
+    #[test]
+    fn blocks_kubectl_destructive() {
+        assert!(blocked("kubectl delete namespace prod"));
+        assert!(blocked("kubectl delete deployment my-app"));
+        assert!(blocked("kubectl delete all --all"));
+        assert!(blocked("kubectl delete pvc data-volume"));
+        assert!(blocked("kubectl delete service my-svc"));
+    }
+
+    #[test]
+    fn allows_kubectl_safe() {
+        assert!(!blocked("kubectl get pods"));
+        assert!(!blocked("kubectl describe deployment my-app"));
+        assert!(!blocked("kubectl logs my-pod"));
+    }
+
     #[test]
     fn allows_safe_commands() {
         assert!(!blocked("dotnet build"));
         assert!(!blocked("./mvnw clean package"));
         assert!(!blocked("go test ./..."));
-        assert!(!blocked("gh pr create --title foo --body bar"));
     }
 }

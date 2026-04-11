@@ -1,5 +1,6 @@
 mod bash;
 mod file_write;
+mod mcp;
 
 use serde_json::Value;
 
@@ -19,6 +20,11 @@ const GUARDS: &[Guard] = &[
         name: "file-write",
         description: "Blocks writes to generated files, secrets, lock files, and Claude config",
         check_fn: file_write::check,
+    },
+    Guard {
+        name: "mcp",
+        description: "Blocks destructive MCP tool calls (Cloudflare delete, Sentry mutate, etc.)",
+        check_fn: mcp::check,
     },
 ];
 
