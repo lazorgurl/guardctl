@@ -125,14 +125,14 @@ Example state after configuration:
   "guards": { "bash": true, "file-write": true, "mcp": true },
   "directories": {
     "/Users/you/code/personal": { "bash": false, "mcp": false },
-    "/Users/you/code/hytale": { "file-write": false }
+    "/Users/you/code/project": { "file-write": false }
   }
 }
 ```
 
 With this config:
 - In `/Users/you/code/personal`, bash and mcp are off, file-write is on (global default)
-- In `/Users/you/code/hytale`, file-write is off, bash and mcp are on (global default)
+- In `/Users/you/code/project`, file-write is off, bash and mcp are on (global default)
 - Everywhere else, all guards are on
 
 The working directory is resolved from (in order): the hook input's `cwd` field, `$PWD`, or the process working directory.
