@@ -2,6 +2,8 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use crate::guards::Decision;
+
 fn log_path() -> PathBuf {
     if let Ok(p) = std::env::var("GUARDCTL_LOG") {
         return PathBuf::from(p);
@@ -15,7 +17,13 @@ fn log_path() -> PathBuf {
         .join(".guardctl-log.jsonl")
 }
 
-pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
+pub fn record(
+    guard: &str,
+    reason: &str,
+    decision: Decision,
+    cwd: Option<&str>,
+    input: &Value,
+) {
     let blocked = match guard {
         "bash" => input
             .pointer("/tool_input/command")
@@ -40,6 +48,7 @@ pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
     let entry = serde_json::json!({
         "ts": ts,
         "guard": guard,
+        "decision": decision.as_str(),
         "blocked": blocked,
         "reason": reason,
         "cwd": cwd.unwrap_or(""),
