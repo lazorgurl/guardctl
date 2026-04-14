@@ -286,6 +286,124 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             decision: Decision::Deny,
             except: None,
         },
+        // --- Package installation (ask) ---
+        // Default is ask; pre-approve specific installs via [[allow]] in .guardctl.toml.
+        // Bare lockfile-sync commands (npm install / yarn / pnpm install) intentionally
+        // do not match — only adding a new dependency triggers the prompt.
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?brew\s+install\s+\S").unwrap(),
+            message: "brew install modifies the global environment. Confirm, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?brew\s+reinstall\s+\S").unwrap(),
+            message: "brew reinstall replaces an installed formula. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?apt(?:-get)?\s+install(?:\s+-\S+)*\s+\S").unwrap(),
+            message: "apt install modifies system packages. Confirm, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:dnf|yum)\s+(?:install|reinstall)(?:\s+-\S+)*\s+\S").unwrap(),
+            message: "dnf/yum install modifies system packages. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pacman\s+-S\S*\s+\S").unwrap(),
+            message: "pacman -S installs packages. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?dpkg\s+-i\s+\S").unwrap(),
+            message: "dpkg -i installs a .deb. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?nix-env\s+-i(?:A)?\s+\S").unwrap(),
+            message: "nix-env -i modifies your profile. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?nix\s+profile\s+install\s+\S").unwrap(),
+            message: "nix profile install modifies your profile. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?npm\s+(?:install|i|add)(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
+            message: "npm install/add with a package adds a dependency. Confirm, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pnpm\s+(?:install|i|add)(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
+            message: "pnpm install/add with a package adds a dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?yarn\s+add(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
+            message: "yarn add installs a new dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:pip[23]?|pipx)\s+install(?:\s+\S+)+").unwrap(),
+            message: "pip install adds a Python package. Confirm, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?uv\s+(?:pip\s+install|add)(?:\s+\S+)+").unwrap(),
+            message: "uv install/add adds a Python package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?poetry\s+add(?:\s+\S+)+").unwrap(),
+            message: "poetry add adds a Python dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cargo\s+install\s+\S").unwrap(),
+            message: "cargo install adds a global Rust binary. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cargo\s+add\s+\S").unwrap(),
+            message: "cargo add adds a crate dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?gem\s+install\s+\S").unwrap(),
+            message: "gem install installs a Ruby gem. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?go\s+install\s+\S").unwrap(),
+            message: "go install fetches and installs a binary. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?go\s+get\s+\S").unwrap(),
+            message: "go get adds a module dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
     ]
 });
 
@@ -586,6 +704,101 @@ mod tests {
         assert!(!blocked("kubectl get pods"));
         assert!(!blocked("kubectl describe deployment my-app"));
         assert!(!blocked("kubectl logs my-pod"));
+    }
+
+    // --- Package installation ---
+
+    #[test]
+    fn asks_on_system_package_install() {
+        assert!(blocked("brew install ripgrep"));
+        assert!(blocked("sudo apt install -y curl"));
+        assert!(blocked("apt-get install nginx"));
+        assert!(blocked("sudo dnf install htop"));
+        assert!(blocked("yum install vim"));
+        assert!(blocked("sudo pacman -S firefox"));
+        assert!(blocked("sudo pacman -Syu firefox"));
+        assert!(blocked("sudo dpkg -i ./thing.deb"));
+        assert!(blocked("nix-env -iA nixpkgs.ripgrep"));
+        assert!(blocked("nix profile install nixpkgs#ripgrep"));
+        assert!(blocked("gem install bundler"));
+        assert!(blocked("brew reinstall ffmpeg"));
+    }
+
+    #[test]
+    fn asks_on_js_package_add() {
+        assert!(blocked("npm install eslint"));
+        assert!(blocked("npm i react"));
+        assert!(blocked("npm install --save-dev typescript"));
+        assert!(blocked("npm i -D @types/node"));
+        assert!(blocked("npm add lodash"));
+        assert!(blocked("pnpm install react"));
+        assert!(blocked("pnpm add -D vitest"));
+        assert!(blocked("yarn add react"));
+        assert!(blocked("yarn add -D @types/react"));
+    }
+
+    #[test]
+    fn allows_bare_lockfile_sync() {
+        // These MUST NOT match — they are lockfile-sync, not a new install.
+        assert!(!blocked("npm install"));
+        assert!(!blocked("npm i"));
+        assert!(!blocked("npm ci"));
+        assert!(!blocked("npm install --production"));
+        assert!(!blocked("npm install -D"));
+        assert!(!blocked("pnpm install"));
+        assert!(!blocked("pnpm i"));
+        assert!(!blocked("yarn"));
+        assert!(!blocked("yarn install"));
+        assert!(!blocked("yarn install --frozen-lockfile"));
+    }
+
+    #[test]
+    fn asks_on_python_package_install() {
+        assert!(blocked("pip install requests"));
+        assert!(blocked("pip3 install requests"));
+        assert!(blocked("pip install -r requirements.txt"));
+        assert!(blocked("pipx install black"));
+        assert!(blocked("uv pip install httpx"));
+        assert!(blocked("uv add httpx"));
+        assert!(blocked("poetry add httpx"));
+        assert!(blocked("poetry add --group dev pytest"));
+    }
+
+    #[test]
+    fn asks_on_rust_package_install() {
+        assert!(blocked("cargo install ripgrep"));
+        assert!(blocked("cargo add serde"));
+        // Ordinary cargo workflows must still pass through.
+        assert!(!blocked("cargo build"));
+        assert!(!blocked("cargo test"));
+        assert!(!blocked("cargo run --release"));
+        assert!(!blocked("cargo check"));
+        assert!(!blocked("cargo fmt"));
+        assert!(!blocked("cargo clippy -- -D warnings"));
+    }
+
+    #[test]
+    fn asks_on_go_package_install() {
+        assert!(blocked("go install github.com/foo/bar@latest"));
+        assert!(blocked("go get github.com/foo/bar"));
+        // Ordinary go workflows must still pass through.
+        assert!(!blocked("go build ./..."));
+        assert!(!blocked("go test ./..."));
+        assert!(!blocked("go run main.go"));
+        assert!(!blocked("go mod tidy"));
+    }
+
+    #[test]
+    fn asks_on_chained_install() {
+        assert!(blocked("git pull && npm install eslint"));
+        assert!(blocked("apt update && apt install -y curl"));
+    }
+
+    #[test]
+    fn package_install_is_ask_not_deny() {
+        assert_eq!(decision_for("npm install eslint"), Some(Decision::Ask));
+        assert_eq!(decision_for("pip install requests"), Some(Decision::Ask));
+        assert_eq!(decision_for("brew install ripgrep"), Some(Decision::Ask));
     }
 
     #[test]
