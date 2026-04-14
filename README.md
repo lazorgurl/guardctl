@@ -14,7 +14,7 @@ An `ask` response is much more useful than `deny` for most destructive-but-legit
 
 | Guard | What it blocks |
 |---|---|
-| **bash** | `rm -rf`, `git push --force`, `git reset --hard`, `git add .`, staging secrets, destructive SQL, `terraform destroy`, cloud resource deletion (AWS, GCP, Cloudflare), `docker system prune`, and more |
+| **bash** | `rm -rf`, `git push --force`, `git reset --hard`, `git add .`, staging secrets, destructive SQL, `terraform destroy`, cloud resource deletion (AWS, GCP, Cloudflare), `docker system prune`, package installs (brew/apt/dnf/npm/pnpm/yarn/pip/poetry/uv/cargo/gem/go), and more |
 | **file-write** | Writes to generated code, secrets/credentials, lock files, Terraform state, Claude config, and the guard state file itself |
 | **mcp** | Destructive MCP tool calls: Cloudflare deletes, Sentry mutations, Linear deletes, JIRA issue creation, Terraform runs |
 
@@ -194,7 +194,19 @@ message = "dist/ is build output — edit the source instead"
 [[allow]]
 guard = "bash"
 pattern = "^git push --force origin experiment$"
+
+# Pre-approve specific package installs so Claude doesn't need to ask each time.
+# The pattern is matched against the whitespace-normalized command.
+[[allow]]
+guard = "bash"
+pattern = "^npm install (--save-dev )?(typescript|eslint|prettier|vitest|@types/[a-z/-]+)$"
+
+[[allow]]
+guard = "bash"
+pattern = "^pip install -r requirements(-dev)?\\.txt$"
 ```
+
+**Pre-approving package installs.** The package-install rules ask by default, but most teams have a known-good set of dependencies they add often. Add `[[allow]]` entries whose regex matches the exact commands you want to pre-approve — the built-in Ask rule short-circuits before firing, so Claude can run them without interrupting you.
 
 The walk stops before `$HOME`, so a `~/.guardctl.toml` is not picked up as project config. Malformed rules are skipped with a warning; a syntactically invalid TOML file causes guardctl to fall back to the default (empty) project config.
 
@@ -209,6 +221,8 @@ The walk stops before `$HOME`, so a `~/.guardctl.toml` is not picked up as proje
 **Cloud:** AWS (terminate instances, delete RDS/S3/IAM/Lambda/ECS/CloudFormation/Route53), GCP (delete compute/SQL/Cloud Run/storage/projects/service accounts, `--quiet` deletes), Cloudflare/Wrangler (delete workers/D1/R2/KV/queues/secrets)
 
 **Other:** destructive SQL (DROP/TRUNCATE), GitHub CLI (repo/release delete, pr/issue close, raw DELETE), Docker (system prune, volume rm, image prune -a), Terraform (destroy, apply -auto-approve), kubectl (delete namespace/deployment/all/pvc/service), shell redirects into Claude config
+
+**Package installation (ask):** `brew install` / `brew reinstall`, `apt`/`apt-get install`, `dnf`/`yum install`, `pacman -S`, `dpkg -i`, `nix-env -i` / `nix profile install`, `npm install <pkg>` / `npm i <pkg>` / `npm add`, `pnpm add`, `yarn add`, `pip install`, `pipx install`, `uv add` / `uv pip install`, `poetry add`, `cargo install`, `cargo add`, `gem install`, `go install`, `go get`. **Bare `npm install` / `pnpm install` / `yarn install` (lockfile sync) are NOT asked** — only adding a new dependency triggers the prompt. Pre-approve specific installs via `[[allow]]` in `.guardctl.toml` (see below).
 
 ### file-write guard
 
