@@ -6,7 +6,9 @@ fn log_path() -> PathBuf {
     if let Ok(p) = std::env::var("GUARDCTL_LOG") {
         return PathBuf::from(p);
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
     PathBuf::from(home)
         .join(".claude")
         .join("hooks")
@@ -54,7 +56,10 @@ pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
         .append(true)
         .open(&path)
     {
-        let _ = writeln!(f, "{}", entry);
+        if writeln!(f, "{}", entry).is_ok() {
+            // Ensure the entry hits disk — audit trail must survive crashes.
+            let _ = f.sync_all();
+        }
     }
 }
 

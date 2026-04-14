@@ -63,20 +63,28 @@ Add to `~/.claude/settings.json`:
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "command": "guardctl check bash"
+        "hooks": [
+          { "type": "command", "command": "guardctl check bash" }
+        ]
       },
       {
         "matcher": "Write|Edit",
-        "command": "guardctl check file-write"
+        "hooks": [
+          { "type": "command", "command": "guardctl check file-write" }
+        ]
       },
       {
         "matcher": "mcp__.*",
-        "command": "guardctl check mcp"
+        "hooks": [
+          { "type": "command", "command": "guardctl check mcp" }
+        ]
       }
     ]
   }
 }
 ```
+
+Note: Claude Code's PreToolUse schema uses an inner `hooks` array with `type: "command"`. A flat `{ "matcher": ..., "command": ... }` entry is silently ignored. `guardctl init` handles this for you; if you previously ran an older `guardctl init` that wrote the flat shape, re-run it to migrate automatically.
 </details>
 
 ## Usage
@@ -166,6 +174,16 @@ guardctl prevents Claude from disabling its own guards:
 - The file-write guard blocks writes to `.guard-state.json` and Claude config files
 
 Only the user can run `guardctl off` from their terminal.
+
+## Known limitations
+
+guardctl is a **guardrail, not a sandbox**. It's designed to catch the dangerous commands an agent is likely to generate, not to defeat a determined attacker. A few things it intentionally does not try to do:
+
+- **Shell evaluation**: rules match against the literal command string after whitespace normalization. Command substitution, unusual quoting, or brace expansion can bypass specific patterns — e.g. `git add $(printf .env)` is not caught by the staging-secrets rule. For project-specific tripwires, add targeted patterns rather than relying solely on the built-ins.
+- **Semantic equivalence**: `rm -rf /tmp/x` is blocked, but functionally equivalent constructions using `find … -delete` may not be.
+- **MCP tool coverage**: the MCP guard matches exact tool names. New or renamed dangerous MCP tools need a guardctl update.
+
+When it matters, combine `guardctl` with Claude Code's permission prompts and with project-level code review rather than treating it as the last line of defense.
 
 ## Development
 

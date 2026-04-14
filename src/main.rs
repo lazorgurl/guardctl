@@ -1,4 +1,5 @@
 mod audit;
+mod fs_util;
 mod guards;
 mod hook;
 mod init;
@@ -103,13 +104,16 @@ fn main() {
 }
 
 /// Resolve the target directory for on/off/status commands.
-/// --global → None (global config). Otherwise, --dir or $PWD.
+/// --global → None (global config). Otherwise, --dir → current_dir → $PWD.
+/// We prefer `current_dir()` over `$PWD` because `$PWD` can be stale in
+/// non-interactive contexts (CI, systemd, nohup), while `current_dir()`
+/// reflects the actual process state.
 fn resolve_dir(dir: Option<String>, global: bool) -> Option<String> {
     if global {
         return None;
     }
-    dir.or_else(|| std::env::var("PWD").ok())
-        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+    dir.or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+        .or_else(|| std::env::var("PWD").ok())
 }
 
 fn cmd_toggle(enable: bool, only: Option<String>, dir: Option<String>) {
@@ -284,13 +288,15 @@ fn cmd_check(guard_name: &str) {
 
     let st = GuardState::load();
 
-    // Resolve working directory: check hook input for cwd, then fall back to $PWD
+    // Resolve working directory: prefer the hook input's `cwd` field (Claude
+    // Code passes the session's actual working directory here), then fall
+    // back to the process current_dir, then $PWD.
     let cwd = input
         .pointer("/cwd")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .or_else(|| std::env::var("PWD").ok())
-        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)));
+        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+        .or_else(|| std::env::var("PWD").ok());
 
     let enabled = match cwd {
         Some(ref dir) => st.is_enabled_for_dir(guard_name, dir),
