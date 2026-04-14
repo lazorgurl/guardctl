@@ -2,9 +2,12 @@ use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
 
+use super::{Block, Decision};
+
 struct Rule {
     pattern: Regex,
     message: &'static str,
+    decision: Decision,
     except: Option<Regex>,
 }
 
@@ -13,237 +16,280 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         // --- Filesystem destruction ---
         Rule {
             pattern: Regex::new(r"(?:^|[;&|]\s*)rm\s+-[a-zA-Z]*r[a-zA-Z]*").unwrap(),
-            message: "BLOCKED: recursive rm detected. Use targeted 'rm' on specific files instead.",
+            message: "recursive rm detected. Confirm only if targeting a scratch directory.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"(?:^|[;&|]\s*)rm\s.*(?:\s\*\s|\s/\s|/Users/|~/)").unwrap(),
-            message: "BLOCKED: rm targeting broad glob or home/root path. Be more specific.",
+            message: "rm targeting a broad glob or home/root path. Confirm or be more specific.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- Git destruction ---
         Rule {
             pattern: Regex::new(r"git\s+push\s.*--force(?:$|\s)").unwrap(),
-            message: "BLOCKED: git push --force. Use --force-with-lease for safer force push, or push normally.",
+            message: "git push --force. Prefer --force-with-lease; confirm if rewriting history is intended.",
+            decision: Decision::Ask,
             except: Some(Regex::new(r"force-with-lease").unwrap()),
         },
         Rule {
             pattern: Regex::new(r"git\s+reset\s+--hard").unwrap(),
-            message: "BLOCKED: git reset --hard discards uncommitted work. Use 'git stash' first, or 'git reset --soft'.",
+            message: "git reset --hard discards uncommitted work. Confirm only if nothing to preserve.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"git\s+clean\s+-[a-zA-Z]*f").unwrap(),
-            message: "BLOCKED: git clean -f deletes untracked files permanently. Use 'git clean -n' (dry run) first.",
+            message: "git clean -f permanently deletes untracked files. Confirm only if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"git\s+checkout\s+--\s+\.").unwrap(),
-            message: "BLOCKED: 'git checkout -- .' discards all unstaged changes. Restore specific files instead.",
+            message: "'git checkout -- .' discards all unstaged changes. Confirm only if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"git\s+branch\s+-D\s").unwrap(),
-            message: "BLOCKED: git branch -D force-deletes a branch. Use 'git branch -d' (safe delete) instead.",
+            message: "git branch -D force-deletes a branch. Confirm only if the branch is truly disposable.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- Push to protected branches ---
         Rule {
             pattern: Regex::new(r"git\s+push\s.*\b(main|master|stage|pre-release|release)\b").unwrap(),
-            message: "BLOCKED: pushing directly to a protected branch. Push to a feature branch and open a PR.",
+            message: "pushing directly to a protected branch. Confirm only if bypassing PR review is intentional.",
+            decision: Decision::Ask,
             except: None,
         },
-        // --- Committing secrets ---
+        // --- Committing secrets (hard deny) ---
         Rule {
             pattern: Regex::new(r"git\s+add\s.*(\.(env|pem|key|p12|pfx|jks|keystore)|credentials|secrets?\.|\.secret|id_rsa|id_ed25519)").unwrap(),
             message: "BLOCKED: staging a file that likely contains secrets. Never commit credentials.",
+            decision: Decision::Deny,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"git\s+add\s+(-A\b|\.\s*$|--all)").unwrap(),
             message: "BLOCKED: 'git add -A' / 'git add .' can accidentally stage secrets. Stage specific files by name.",
+            decision: Decision::Deny,
             except: None,
         },
-        // --- Self-modification ---
+        // --- Self-modification (hard deny) ---
         Rule {
             pattern: Regex::new(r"(>|>>|tee\s).*\.claude/(settings\.json|hooks/)").unwrap(),
             message: "BLOCKED: shell redirect into Claude config/hooks. Use the Edit tool so the file-write-guard can review.",
+            decision: Decision::Deny,
             except: None,
         },
-        // --- Guard tampering ---
+        // --- Guard tampering (hard deny) ---
         Rule {
             pattern: Regex::new(r"guardctl\s+off").unwrap(),
             message: "BLOCKED: only the user can disable guardctl. Ask them to run 'guardctl off' manually.",
+            decision: Decision::Deny,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"(>|>>|tee\s|rm\s).*\.guard-state\.json").unwrap(),
             message: "BLOCKED: direct manipulation of guard state file. Use 'guardctl on/off' (user only).",
+            decision: Decision::Deny,
             except: None,
         },
         // --- Database destruction ---
         Rule {
             pattern: Regex::new(r"(?i)(DROP\s+(TABLE|DATABASE|SCHEMA)|TRUNCATE\s+TABLE)").unwrap(),
-            message: "BLOCKED: destructive SQL (DROP/TRUNCATE). This is irreversible in production.",
+            message: "destructive SQL (DROP/TRUNCATE). Confirm only if targeting a disposable/test database.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- GitHub CLI ---
         Rule {
             pattern: Regex::new(r"gh\s+repo\s+delete").unwrap(),
-            message: "BLOCKED: gh repo delete destroys an entire repository. This needs manual confirmation.",
+            message: "gh repo delete destroys an entire repository. Confirm only if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gh\s+api\s.*-X\s*DELETE").unwrap(),
-            message: "BLOCKED: raw DELETE via gh api. Use a specific gh subcommand or get manual confirmation.",
+            message: "raw DELETE via gh api. Prefer a specific gh subcommand; confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gh\s+release\s+delete").unwrap(),
-            message: "BLOCKED: gh release delete removes a published release. This needs manual confirmation.",
+            message: "gh release delete removes a published release. Confirm only if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gh\s+pr\s+close").unwrap(),
-            message: "BLOCKED: closing a PR should be a deliberate human decision.",
+            message: "closing a PR should be a deliberate decision. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gh\s+issue\s+close").unwrap(),
-            message: "BLOCKED: closing an issue should be a deliberate human decision.",
+            message: "closing an issue should be a deliberate decision. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- GCP (gcloud) ---
         Rule {
             pattern: Regex::new(r"gcloud\s+compute\s+instances\s+delete").unwrap(),
-            message: "BLOCKED: deleting GCP compute instances. This needs manual confirmation.",
+            message: "deleting GCP compute instances. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+sql\s+instances\s+delete").unwrap(),
-            message: "BLOCKED: deleting Cloud SQL instances destroys databases. This needs manual confirmation.",
+            message: "deleting Cloud SQL instances destroys databases. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+run\s+services\s+delete").unwrap(),
-            message: "BLOCKED: deleting Cloud Run services takes down live traffic. This needs manual confirmation.",
+            message: "deleting Cloud Run services takes down live traffic. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+storage\s+(rm|delete)").unwrap(),
-            message: "BLOCKED: deleting GCP storage objects/buckets. This needs manual confirmation.",
+            message: "deleting GCP storage objects/buckets. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+projects\s+delete").unwrap(),
-            message: "BLOCKED: deleting a GCP project destroys all resources within it. This needs manual confirmation.",
+            message: "deleting a GCP project destroys all resources within it. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+iam\s+service-accounts\s+delete").unwrap(),
-            message: "BLOCKED: deleting service accounts can break running services. This needs manual confirmation.",
+            message: "deleting service accounts can break running services. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"gcloud\s+.*--quiet\s.*delete|gcloud\s+.*delete\s.*--quiet").unwrap(),
-            message: "BLOCKED: gcloud delete with --quiet skips confirmation. This needs manual confirmation.",
+            message: "gcloud delete with --quiet skips confirmation. Confirm interactively if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- AWS CLI ---
         Rule {
             pattern: Regex::new(r"aws\s+ec2\s+terminate-instances").unwrap(),
-            message: "BLOCKED: terminating EC2 instances. This needs manual confirmation.",
+            message: "terminating EC2 instances. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+rds\s+delete-db-(instance|cluster)").unwrap(),
-            message: "BLOCKED: deleting RDS databases. This needs manual confirmation.",
+            message: "deleting RDS databases. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+s3\s+(rb|rm)\s").unwrap(),
-            message: "BLOCKED: deleting S3 buckets/objects. This needs manual confirmation.",
+            message: "deleting S3 buckets/objects. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+s3api\s+delete-bucket").unwrap(),
-            message: "BLOCKED: deleting S3 bucket. This needs manual confirmation.",
+            message: "deleting S3 bucket. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+iam\s+delete-(role|user|policy|group)").unwrap(),
-            message: "BLOCKED: deleting IAM resources. This needs manual confirmation.",
+            message: "deleting IAM resources. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+lambda\s+delete-function").unwrap(),
-            message: "BLOCKED: deleting Lambda functions. This needs manual confirmation.",
+            message: "deleting Lambda functions. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+cloudformation\s+delete-stack").unwrap(),
-            message: "BLOCKED: deleting CloudFormation stacks tears down all stack resources. This needs manual confirmation.",
+            message: "deleting CloudFormation stacks tears down all stack resources. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+ecs\s+delete-(service|cluster)").unwrap(),
-            message: "BLOCKED: deleting ECS services/clusters. This needs manual confirmation.",
+            message: "deleting ECS services/clusters. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"aws\s+route53\s+delete-hosted-zone").unwrap(),
-            message: "BLOCKED: deleting Route53 hosted zone destroys DNS records. This needs manual confirmation.",
+            message: "deleting Route53 hosted zone destroys DNS records. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- Wrangler (Cloudflare Workers) ---
         Rule {
             pattern: Regex::new(r"wrangler\s+(delete|d1\s+delete|r2\s+bucket\s+delete|kv:namespace\s+delete|queues\s+delete|secret\s+delete)").unwrap(),
-            message: "BLOCKED: wrangler delete destroys Cloudflare resources. This needs manual confirmation.",
+            message: "wrangler delete destroys Cloudflare resources. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- Docker ---
         Rule {
             pattern: Regex::new(r"docker\s+system\s+prune").unwrap(),
-            message: "BLOCKED: docker system prune removes all unused data. Use targeted docker rm/rmi instead.",
+            message: "docker system prune removes all unused data. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"docker\s+volume\s+(rm|prune)").unwrap(),
-            message: "BLOCKED: removing docker volumes destroys persistent data. This needs manual confirmation.",
+            message: "removing docker volumes destroys persistent data. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"docker\s+image\s+prune\s+-a").unwrap(),
-            message: "BLOCKED: docker image prune -a removes all unused images. Use targeted docker rmi instead.",
+            message: "docker image prune -a removes all unused images. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- Terraform ---
         Rule {
             pattern: Regex::new(r"terraform\s+destroy").unwrap(),
-            message: "BLOCKED: terraform destroy tears down infrastructure. This needs manual confirmation.",
+            message: "terraform destroy tears down infrastructure. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         Rule {
             pattern: Regex::new(r"terraform\s+apply\s.*-auto-approve").unwrap(),
-            message: "BLOCKED: terraform apply -auto-approve skips the plan review. Run 'terraform plan' first, then apply with manual confirmation.",
+            message: "terraform apply -auto-approve skips plan review. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
         // --- kubectl ---
         Rule {
             pattern: Regex::new(r"kubectl\s+delete\s+(namespace|ns|deployment|all|pvc|pv|svc|service)").unwrap(),
-            message: "BLOCKED: kubectl delete on broad resources. Target specific resources instead.",
+            message: "kubectl delete on broad resources. Confirm if intentional.",
+            decision: Decision::Ask,
             except: None,
         },
-        // --- Bypassing safety ---
+        // --- Bypassing safety (hard deny) ---
         Rule {
             pattern: Regex::new(r"git\s+(commit|push|rebase)\s.*--no-verify").unwrap(),
             message: "BLOCKED: --no-verify skips hooks. Fix the underlying hook failure instead.",
+            decision: Decision::Deny,
             except: None,
         },
     ]
 });
 
-pub fn check(input: &Value) -> Option<String> {
+pub fn check(input: &Value) -> Option<Block> {
     let cmd = input
         .pointer("/tool_input/command")
         .and_then(|v| v.as_str())?;
@@ -257,7 +303,10 @@ pub fn check(input: &Value) -> Option<String> {
                     continue;
                 }
             }
-            return Some(rule.message.to_string());
+            return Some(Block {
+                decision: rule.decision,
+                reason: rule.message.to_string(),
+            });
         }
     }
 
@@ -275,6 +324,10 @@ mod tests {
 
     fn blocked(cmd: &str) -> bool {
         check(&input(cmd)).is_some()
+    }
+
+    fn decision_for(cmd: &str) -> Option<Decision> {
+        check(&input(cmd)).map(|b| b.decision)
     }
 
     #[test]
@@ -540,5 +593,45 @@ mod tests {
         assert!(!blocked("dotnet build"));
         assert!(!blocked("./mvnw clean package"));
         assert!(!blocked("go test ./..."));
+    }
+
+    // --- Decision classification ---
+
+    #[test]
+    fn secret_staging_is_deny_not_ask() {
+        assert_eq!(decision_for("git add .env"), Some(Decision::Deny));
+        assert_eq!(decision_for("git add -A"), Some(Decision::Deny));
+        assert_eq!(decision_for("git add id_rsa"), Some(Decision::Deny));
+    }
+
+    #[test]
+    fn guard_tampering_is_deny() {
+        assert_eq!(decision_for("guardctl off"), Some(Decision::Deny));
+        assert_eq!(decision_for("rm .guard-state.json"), Some(Decision::Deny));
+        assert_eq!(
+            decision_for("echo '{}' > ~/.claude/settings.json"),
+            Some(Decision::Deny)
+        );
+    }
+
+    #[test]
+    fn no_verify_is_deny() {
+        assert_eq!(decision_for("git commit --no-verify -m fix"), Some(Decision::Deny));
+    }
+
+    #[test]
+    fn destructive_ops_are_ask() {
+        assert_eq!(decision_for("rm -rf /tmp/stuff"), Some(Decision::Ask));
+        assert_eq!(
+            decision_for("git push --force origin main"),
+            Some(Decision::Ask)
+        );
+        assert_eq!(decision_for("git reset --hard"), Some(Decision::Ask));
+        assert_eq!(decision_for("terraform destroy"), Some(Decision::Ask));
+        assert_eq!(
+            decision_for("aws ec2 terminate-instances --instance-ids i-1234"),
+            Some(Decision::Ask)
+        );
+        assert_eq!(decision_for("kubectl delete namespace prod"), Some(Decision::Ask));
     }
 }

@@ -1,10 +1,14 @@
 mod audit;
+mod fs_util;
 mod guards;
 mod hook;
 mod init;
+mod project;
 mod state;
 
 use clap::{Parser, Subcommand};
+use guards::Block;
+use project::ProjectConfig;
 use state::GuardState;
 
 #[derive(Parser)]
@@ -103,13 +107,16 @@ fn main() {
 }
 
 /// Resolve the target directory for on/off/status commands.
-/// --global → None (global config). Otherwise, --dir or $PWD.
+/// --global → None (global config). Otherwise, --dir → current_dir → $PWD.
+/// We prefer `current_dir()` over `$PWD` because `$PWD` can be stale in
+/// non-interactive contexts (CI, systemd, nohup), while `current_dir()`
+/// reflects the actual process state.
 fn resolve_dir(dir: Option<String>, global: bool) -> Option<String> {
     if global {
         return None;
     }
-    dir.or_else(|| std::env::var("PWD").ok())
-        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+    dir.or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+        .or_else(|| std::env::var("PWD").ok())
 }
 
 fn cmd_toggle(enable: bool, only: Option<String>, dir: Option<String>) {
@@ -219,9 +226,31 @@ fn cmd_test(bash: Option<String>, file_write: Option<String>, mcp: Option<String
         std::process::exit(1);
     }
 
+    // `guardctl test` also honours the project `.guardctl.toml` in the cwd
+    // so that users can sanity-check custom rules and allowlists.
+    let cwd = std::env::current_dir()
+        .ok()
+        .and_then(|p| p.to_str().map(String::from));
+    let project = ProjectConfig::discover(cwd.as_deref());
+    if let Some(src) = project.source() {
+        eprintln!("Using project config: {}", src.display());
+    }
+
     for (guard_name, input) in &checks {
-        match guards::check(guard_name, input) {
-            Some(reason) => eprintln!("BLOCKED by {guard_name}: {reason}"),
+        if project.is_allowed(guard_name, input) {
+            eprintln!("ALLOWED by {guard_name} (project allowlist)");
+            continue;
+        }
+        let block = guards::check(guard_name, input)
+            .or_else(|| project.check_extras(guard_name, input));
+        match block {
+            Some(b) => {
+                let label = match b.decision {
+                    guards::Decision::Deny => "DENY",
+                    guards::Decision::Ask => "ASK ",
+                };
+                eprintln!("{label} by {guard_name}: {}", b.reason);
+            }
             None => eprintln!("ALLOWED by {guard_name}"),
         }
     }
@@ -239,12 +268,17 @@ fn cmd_log(count: usize, json: bool) {
         } else {
             let ts = entry.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
             let guard = entry.get("guard").and_then(|v| v.as_str()).unwrap_or("?");
+            // decision was added in a later version; older entries default to "deny".
+            let decision = entry
+                .get("decision")
+                .and_then(|v| v.as_str())
+                .unwrap_or("deny");
             let blocked = entry.get("blocked").and_then(|v| v.as_str()).unwrap_or("?");
             let reason = entry.get("reason").and_then(|v| v.as_str()).unwrap_or("");
             let cwd = entry.get("cwd").and_then(|v| v.as_str()).unwrap_or("");
 
             let time = format_ts(ts);
-            eprintln!("{time}  [{guard}]  {blocked}");
+            eprintln!("{time}  [{guard}/{decision}]  {blocked}");
             if !cwd.is_empty() {
                 eprintln!("  cwd: {cwd}");
             }
@@ -284,29 +318,50 @@ fn cmd_check(guard_name: &str) {
 
     let st = GuardState::load();
 
-    // Resolve working directory: check hook input for cwd, then fall back to $PWD
+    // Resolve working directory: prefer the hook input's `cwd` field (Claude
+    // Code passes the session's actual working directory here), then fall
+    // back to the process current_dir, then $PWD.
     let cwd = input
         .pointer("/cwd")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .or_else(|| std::env::var("PWD").ok())
-        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)));
+        .or_else(|| std::env::current_dir().ok().and_then(|p| p.to_str().map(String::from)))
+        .or_else(|| std::env::var("PWD").ok());
 
-    let enabled = match cwd {
-        Some(ref dir) => st.is_enabled_for_dir(guard_name, dir),
-        None => st.is_enabled(guard_name),
+    // Per-project config: walk up from cwd to find a `.guardctl.toml`.
+    let project = ProjectConfig::discover(cwd.as_deref());
+
+    // Guard enable precedence: project [guards] > state directory > state global.
+    let enabled = match project.guard_enabled(guard_name) {
+        Some(v) => v,
+        None => match cwd {
+            Some(ref dir) => st.is_enabled_for_dir(guard_name, dir),
+            None => st.is_enabled(guard_name),
+        },
     };
 
     if !enabled {
         std::process::exit(0);
     }
 
-    match guards::check(guard_name, &input) {
-        Some(reason) => {
-            audit::record(guard_name, &reason, cwd.as_deref(), &input);
-            print!("{}", hook::deny_json(&reason));
-            std::process::exit(0);
-        }
-        None => std::process::exit(0),
+    // Project allowlist short-circuits everything else.
+    if project.is_allowed(guard_name, &input) {
+        std::process::exit(0);
     }
+
+    // Built-in rules first, then project [[rules]] extras.
+    let block: Option<Block> = guards::check(guard_name, &input)
+        .or_else(|| project.check_extras(guard_name, &input));
+
+    if let Some(block) = block {
+        audit::record(
+            guard_name,
+            &block.reason,
+            block.decision,
+            cwd.as_deref(),
+            &input,
+        );
+        print!("{}", hook::decision_json(block.decision, &block.reason));
+    }
+    std::process::exit(0);
 }

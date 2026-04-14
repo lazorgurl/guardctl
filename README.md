@@ -2,7 +2,13 @@
 
 Blast-radius guard for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Prevents autonomous agents from running destructive commands, writing to sensitive files, or calling dangerous MCP tools — without slowing down normal work.
 
-guardctl runs as a Claude Code [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks). It reads the tool invocation from stdin, checks it against a set of rules, and either allows it (exit 0, no output) or denies it (prints a JSON deny decision). Claude sees the denial reason and adjusts its approach.
+guardctl runs as a Claude Code [PreToolUse hook](https://docs.anthropic.com/en/docs/claude-code/hooks). It reads the tool invocation from stdin, checks it against a set of rules, and returns one of three decisions:
+
+- **allow** (exit 0, no output) — the tool runs normally.
+- **ask** — Claude Code pops a permission dialog so the user can decide. Used for destructive operations that are *sometimes* legitimate (`rm -rf`, `git push --force`, `terraform destroy`, cloud deletes).
+- **deny** — hard stop, Claude sees the refusal and re-routes. Used for true tripwires that are never legitimate from an agent: staging secrets, `git add -A`/`.`, guardctl tampering, `--no-verify`, Claude config writes, Sentry/Linear mutations, JIRA-create-issue.
+
+An `ask` response is much more useful than `deny` for most destructive-but-legitimate cases: it surfaces the decision to the human (who is the authoritative source of "is this intentional right now") instead of teaching Claude to route around the guard.
 
 ## Guards
 
@@ -63,20 +69,28 @@ Add to `~/.claude/settings.json`:
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "command": "guardctl check bash"
+        "hooks": [
+          { "type": "command", "command": "guardctl check bash" }
+        ]
       },
       {
         "matcher": "Write|Edit",
-        "command": "guardctl check file-write"
+        "hooks": [
+          { "type": "command", "command": "guardctl check file-write" }
+        ]
       },
       {
         "matcher": "mcp__.*",
-        "command": "guardctl check mcp"
+        "hooks": [
+          { "type": "command", "command": "guardctl check mcp" }
+        ]
       }
     ]
   }
 }
 ```
+
+Note: Claude Code's PreToolUse schema uses an inner `hooks` array with `type: "command"`. A flat `{ "matcher": ..., "command": ... }` entry is silently ignored. `guardctl init` handles this for you; if you previously ran an older `guardctl init` that wrote the flat shape, re-run it to migrate automatically.
 </details>
 
 ## Usage
@@ -135,9 +149,54 @@ With this config:
 - In `/Users/you/code/project`, file-write is off, bash and mcp are on (global default)
 - Everywhere else, all guards are on
 
-The working directory is resolved from (in order): the hook input's `cwd` field, `$PWD`, or the process working directory.
+The working directory is resolved from (in order): the hook input's `cwd` field, the process current directory, or `$PWD`.
 
 State is stored at `~/.claude/hooks/.guard-state.json` (override with `$GUARDCTL_STATE`).
+
+## Per-project config (`.guardctl.toml`)
+
+Drop a `.guardctl.toml` in your repository root (or any ancestor of the working directory, up to `$HOME`) to customize guardctl for that project. This is a great place to ship team conventions alongside code — new contributors get the right guards automatically.
+
+When a hook fires, guardctl walks up from the resolved `cwd` looking for the nearest `.guardctl.toml` and applies it **on top of** the state file and built-in rules:
+
+1. Project `[guards]` on/off overrides the state file's per-directory and global settings.
+2. Project `[[allow]]` entries short-circuit built-in rules — if a command matches an allow pattern, it runs without further checks.
+3. Project `[[rules]]` entries add project-specific tripwires. They are consulted *after* the built-ins, so they can only add coverage, not weaken it (use `[[allow]]` to weaken).
+
+Example `.guardctl.toml`:
+
+```toml
+# Optional: override guard on/off for this project only.
+[guards]
+bash = true
+file-write = true
+mcp = false  # don't run the mcp guard in this repo
+
+# Custom project tripwires. Each [[rules]] entry has:
+#   guard    = "bash" | "file-write" | "mcp"
+#   pattern  = a regex (matched against the command / file_path / tool name)
+#   decision = "ask" | "deny"
+#   message  = shown in the permission dialog / audit log
+[[rules]]
+guard = "bash"
+pattern = "^make deploy-prod"
+decision = "ask"
+message = "Production deploy needs human sign-off"
+
+[[rules]]
+guard = "file-write"
+pattern = "^.*/dist/"
+decision = "deny"
+message = "dist/ is build output — edit the source instead"
+
+# Allowlist: whitelisted regexes that override built-in rules for this project.
+# Use sparingly — this is how you soften a built-in guard for specific contexts.
+[[allow]]
+guard = "bash"
+pattern = "^git push --force origin experiment$"
+```
+
+The walk stops before `$HOME`, so a `~/.guardctl.toml` is not picked up as project config. Malformed rules are skipped with a warning; a syntactically invalid TOML file causes guardctl to fall back to the default (empty) project config.
 
 ## What gets blocked
 
@@ -166,6 +225,16 @@ guardctl prevents Claude from disabling its own guards:
 - The file-write guard blocks writes to `.guard-state.json` and Claude config files
 
 Only the user can run `guardctl off` from their terminal.
+
+## Known limitations
+
+guardctl is a **guardrail, not a sandbox**. It's designed to catch the dangerous commands an agent is likely to generate, not to defeat a determined attacker. A few things it intentionally does not try to do:
+
+- **Shell evaluation**: rules match against the literal command string after whitespace normalization. Command substitution, unusual quoting, or brace expansion can bypass specific patterns — e.g. `git add $(printf .env)` is not caught by the staging-secrets rule. For project-specific tripwires, add targeted patterns rather than relying solely on the built-ins.
+- **Semantic equivalence**: `rm -rf /tmp/x` is blocked, but functionally equivalent constructions using `find … -delete` may not be.
+- **MCP tool coverage**: the MCP guard matches exact tool names. New or renamed dangerous MCP tools need a guardctl update.
+
+When it matters, combine `guardctl` with Claude Code's permission prompts and with project-level code review rather than treating it as the last line of defense.
 
 ## Development
 

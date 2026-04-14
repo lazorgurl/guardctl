@@ -16,7 +16,14 @@ impl GuardState {
         if let Ok(p) = std::env::var("GUARDCTL_STATE") {
             return PathBuf::from(p);
         }
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| {
+                eprintln!(
+                    "guardctl: HOME not set; falling back to current directory for state storage"
+                );
+                ".".into()
+            });
         PathBuf::from(home)
             .join(".claude")
             .join("hooks")
@@ -35,10 +42,18 @@ impl GuardState {
 
     pub fn save(&self) {
         if let Some(parent) = self.path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("guardctl: failed to create state dir {}: {e}", parent.display());
+                return;
+            }
         }
         let json = serde_json::to_string_pretty(&self).unwrap_or_default();
-        let _ = std::fs::write(&self.path, json);
+        if let Err(e) = crate::fs_util::atomic_write(&self.path, json.as_bytes()) {
+            eprintln!(
+                "guardctl: failed to save state to {}: {e}",
+                self.path.display()
+            );
+        }
     }
 
     /// Check if a guard is enabled globally (no directory context).

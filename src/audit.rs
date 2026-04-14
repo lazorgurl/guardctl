@@ -2,18 +2,28 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use crate::guards::Decision;
+
 fn log_path() -> PathBuf {
     if let Ok(p) = std::env::var("GUARDCTL_LOG") {
         return PathBuf::from(p);
     }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
     PathBuf::from(home)
         .join(".claude")
         .join("hooks")
         .join(".guardctl-log.jsonl")
 }
 
-pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
+pub fn record(
+    guard: &str,
+    reason: &str,
+    decision: Decision,
+    cwd: Option<&str>,
+    input: &Value,
+) {
     let blocked = match guard {
         "bash" => input
             .pointer("/tool_input/command")
@@ -38,6 +48,7 @@ pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
     let entry = serde_json::json!({
         "ts": ts,
         "guard": guard,
+        "decision": decision.as_str(),
         "blocked": blocked,
         "reason": reason,
         "cwd": cwd.unwrap_or(""),
@@ -54,7 +65,10 @@ pub fn record(guard: &str, reason: &str, cwd: Option<&str>, input: &Value) {
         .append(true)
         .open(&path)
     {
-        let _ = writeln!(f, "{}", entry);
+        if writeln!(f, "{}", entry).is_ok() {
+            // Ensure the entry hits disk — audit trail must survive crashes.
+            let _ = f.sync_all();
+        }
     }
 }
 
