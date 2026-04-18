@@ -52,6 +52,22 @@ const RULES: &[Rule] = &[
         message: "BLOCKED: mutating Sentry project settings from an agent. Ask the user to do this manually.",
         decision: Decision::Deny,
     },
+    // --- Sentry creates (ask — legitimate setup sometimes) ---
+    Rule {
+        tool_name: "mcp__sentry__create_dsn",
+        message: "creating a Sentry DSN provisions credentials. Confirm if intentional.",
+        decision: Decision::Ask,
+    },
+    Rule {
+        tool_name: "mcp__sentry__create_project",
+        message: "creating a Sentry project. Confirm if intentional.",
+        decision: Decision::Ask,
+    },
+    Rule {
+        tool_name: "mcp__sentry__create_team",
+        message: "creating a Sentry team. Confirm if intentional.",
+        decision: Decision::Ask,
+    },
     // --- Linear (deny — destroying shared content) ---
     Rule {
         tool_name: "mcp__claude_ai_Linear__delete_comment",
@@ -131,12 +147,32 @@ mod tests {
     fn blocks_sentry_mutations() {
         assert!(blocked("mcp__sentry__update_issue"));
         assert!(blocked("mcp__sentry__update_project"));
+        assert!(blocked("mcp__sentry__create_dsn"));
+        assert!(blocked("mcp__sentry__create_project"));
+        assert!(blocked("mcp__sentry__create_team"));
     }
 
     #[test]
     fn allows_sentry_reads() {
         assert!(!blocked("mcp__sentry__list_issues"));
+        assert!(!blocked("mcp__sentry__list_events"));
+        assert!(!blocked("mcp__sentry__list_issue_events"));
         assert!(!blocked("mcp__sentry__find_organizations"));
+        assert!(!blocked("mcp__sentry__find_projects"));
+        assert!(!blocked("mcp__sentry__find_dsns"));
+        assert!(!blocked("mcp__sentry__find_teams"));
+        assert!(!blocked("mcp__sentry__find_releases"));
+        assert!(!blocked("mcp__sentry__get_event_attachment"));
+        assert!(!blocked("mcp__sentry__get_issue_tag_values"));
+        assert!(!blocked("mcp__sentry__analyze_issue_with_seer"));
+        assert!(!blocked("mcp__sentry__whoami"));
+    }
+
+    #[test]
+    fn sentry_create_rules_are_ask() {
+        assert_eq!(decision_for("mcp__sentry__create_dsn"), Some(Decision::Ask));
+        assert_eq!(decision_for("mcp__sentry__create_project"), Some(Decision::Ask));
+        assert_eq!(decision_for("mcp__sentry__create_team"), Some(Decision::Ask));
     }
 
     #[test]
