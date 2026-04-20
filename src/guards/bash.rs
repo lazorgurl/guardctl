@@ -351,8 +351,20 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             except: None,
         },
         Rule {
-            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?yarn\s+add(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?yarn\s+(?:global\s+)?add(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
             message: "yarn add installs a new dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?yarn\s+install\s+(?:-\S+\s+)*-g(?:lobal)?(?:\s|$)").unwrap(),
+            message: "yarn install -g installs globally. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?bun\s+(?:install|i|add|a)(?:\s+-\S+)*\s+[A-Za-z0-9@._/]").unwrap(),
+            message: "bun install/add with a package adds a dependency. Confirm if intentional.",
             decision: Decision::Ask,
             except: None,
         },
@@ -401,6 +413,358 @@ static RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         Rule {
             pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?go\s+get\s+\S").unwrap(),
             message: "go get adds a module dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:conda|mamba)\s+install\s+\S").unwrap(),
+            message: "conda/mamba install adds a package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pdm\s+add\s+\S").unwrap(),
+            message: "pdm add adds a Python dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?rye\s+add\s+\S").unwrap(),
+            message: "rye add adds a Python dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?easy_install\s+\S").unwrap(),
+            message: "easy_install installs a Python package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?deno\s+(?:install|add)(?:\s+-\S+)*\s+[A-Za-z0-9@._/:]").unwrap(),
+            message: "deno install/add fetches a module or script. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?volta\s+install\s+\S").unwrap(),
+            message: "volta install adds a global tool. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?bundle\s+add\s+\S").unwrap(),
+            message: "bundle add adds a Ruby gem to the Gemfile. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?dotnet\s+tool\s+install\s+\S").unwrap(),
+            message: "dotnet tool install adds a .NET tool. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?dotnet\s+add\s+package\s+\S").unwrap(),
+            message: "dotnet add package adds a NuGet dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?nuget\s+install\s+\S").unwrap(),
+            message: "nuget install fetches a NuGet package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?composer\s+(?:global\s+)?require\s+\S").unwrap(),
+            message: "composer require adds a PHP dependency. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pecl\s+install\s+\S").unwrap(),
+            message: "pecl install adds a PHP extension. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pear\s+install\s+\S").unwrap(),
+            message: "pear install adds a PEAR package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?sdk\s+install\s+\S").unwrap(),
+            message: "sdk install (SDKMAN) installs a JVM SDK. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?jbang\s+app\s+install\s+\S").unwrap(),
+            message: "jbang app install adds a JBang app. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cs\s+install\s+\S").unwrap(),
+            message: "cs install (coursier) installs a JVM tool. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cabal\s+install\s+\S").unwrap(),
+            message: "cabal install adds a Haskell package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?stack\s+install\s+\S").unwrap(),
+            message: "stack install adds a Haskell package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?ghcup\s+install\s+\S").unwrap(),
+            message: "ghcup install adds a Haskell toolchain component. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?opam\s+install\s+\S").unwrap(),
+            message: "opam install adds an OCaml package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?mix\s+(?:archive|escript)\.install\s+\S").unwrap(),
+            message: "mix archive/escript install adds an Elixir tool. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?luarocks\s+install\s+\S").unwrap(),
+            message: "luarocks install adds a Lua rock. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cpanm\s+\S").unwrap(),
+            message: "cpanm installs a Perl module. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cpan\s+(?:install|-i)\s+\S").unwrap(),
+            message: "cpan install installs a Perl module. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?nimble\s+install\s+\S").unwrap(),
+            message: "nimble install adds a Nim package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:dart|flutter)\s+pub\s+(?:add|global\s+activate)\s+\S").unwrap(),
+            message: "dart/flutter pub add/activate adds a package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?mint\s+install\s+\S").unwrap(),
+            message: "mint install adds a Swift tool. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?vcpkg\s+install\s+\S").unwrap(),
+            message: "vcpkg install adds a C/C++ package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?conan\s+install\s+\S").unwrap(),
+            message: "conan install fetches C/C++ dependencies. Confirm, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?cargo\s+binstall\s+\S").unwrap(),
+            message: "cargo binstall fetches a prebuilt Rust binary. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?port\s+install\s+\S").unwrap(),
+            message: "port install (MacPorts) adds a system package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?apk\s+add\s+\S").unwrap(),
+            message: "apk add installs an Alpine package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?zypper\s+(?:install|in)\s+\S").unwrap(),
+            message: "zypper install adds an openSUSE package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?emerge\s+\S").unwrap(),
+            message: "emerge installs/updates Gentoo packages. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: Some(Regex::new(r"emerge\s+(?:--sync|--info|--help|--version|-h\b|-V\b)").unwrap()),
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?xbps-install\s+\S").unwrap(),
+            message: "xbps-install adds a Void Linux package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?snap\s+install\s+\S").unwrap(),
+            message: "snap install adds a snap package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?flatpak\s+install\s+\S").unwrap(),
+            message: "flatpak install adds a flatpak. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?choco\s+install\s+\S").unwrap(),
+            message: "choco install adds a Chocolatey package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?scoop\s+install\s+\S").unwrap(),
+            message: "scoop install adds a Scoop package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?winget\s+install\s+\S").unwrap(),
+            message: "winget install adds a Windows package. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?asdf\s+install\s+\S").unwrap(),
+            message: "asdf install adds a runtime version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?mise\s+install\s+\S").unwrap(),
+            message: "mise install adds a runtime version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?pyenv\s+install\s+\S").unwrap(),
+            message: "pyenv install adds a Python version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?nvm\s+install\s+\S").unwrap(),
+            message: "nvm install adds a Node version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?rbenv\s+install\s+\S").unwrap(),
+            message: "rbenv install adds a Ruby version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?fnm\s+install\s+\S").unwrap(),
+            message: "fnm install adds a Node version. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?gh\s+extension\s+install\s+\S").unwrap(),
+            message: "gh extension install adds a gh CLI extension. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?code\s+--install-extension\s+\S").unwrap(),
+            message: "code --install-extension adds a VS Code extension. Confirm if intentional.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // --- curl|sh and friends (ask) ---
+        // Downloads piped into a shell interpreter (classic install-one-liner).
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:curl|wget|fetch|aria2c|http|httpie)\s+\S.*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|ksh|dash|fish|ash|tcsh|csh)(?:\s|$)").unwrap(),
+            message: "Piping a downloaded script into a shell. Review the source first, or pre-approve in .guardctl.toml.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // bash <(curl ...) / zsh <(wget ...) — process substitution of a network fetch.
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:sudo\s+)?(?:sh|bash|zsh|ksh|dash|fish)(?:\s+-\S+)*\s+<\(\s*(?:curl|wget|fetch|http)\b").unwrap(),
+            message: "Running a downloaded script via process substitution. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // sh -c "$(curl ...)" / bash -c "$(wget ...)" — command substitution of a network fetch.
+        Rule {
+            pattern: Regex::new(r#"(?:^|[;&|]\s*)(?:sudo\s+)?(?:sh|bash|zsh|ksh|dash|fish)(?:\s+-\S+)*\s+-c\s+["']?\$\(\s*(?:curl|wget|fetch|http)\b"#).unwrap(),
+            message: "Running a downloaded script via command substitution. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // eval "$(curl ...)" — evaluating the body of a network download.
+        Rule {
+            pattern: Regex::new(r#"(?:^|[;&|]\s*)eval\s+["']?\$\(\s*(?:curl|wget|fetch|http)\b"#).unwrap(),
+            message: "Evaluating the output of a network download. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // source <(curl ...) / . <(curl ...) — sourcing a downloaded script into the shell.
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:source|\.)\s+<\(\s*(?:curl|wget|fetch|http)\b").unwrap(),
+            message: "Sourcing a downloaded script into the current shell. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // Piping downloads into language interpreters that execute stdin as code.
+        // Restricted to interpreters typically invoked without args at the end
+        // (so `| jq .`, `| python -m json.tool`, etc. still pass).
+        Rule {
+            pattern: Regex::new(r"(?:^|[;&|]\s*)(?:curl|wget|fetch|http)\s+\S.*\|\s*(?:sudo\s+)?(?:python[23]?|perl|ruby|php)(?:\s+-\s*)?(?:\s*$|\s*[;&|])").unwrap(),
+            message: "Piping a downloaded script into a language interpreter. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        // PowerShell equivalent: iwr URL | iex, or iex (iwr URL).
+        Rule {
+            pattern: Regex::new(r"(?i)\b(?:iwr|invoke-webrequest)\b.*\|\s*(?:iex|invoke-expression)\b").unwrap(),
+            message: "PowerShell iwr|iex runs a downloaded script. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?i)\b(?:iex|invoke-expression)\b[^|]*\(\s*(?:iwr|invoke-webrequest)\b").unwrap(),
+            message: "PowerShell iex(iwr ...) runs a downloaded script. Review the source first.",
+            decision: Decision::Ask,
+            except: None,
+        },
+        Rule {
+            pattern: Regex::new(r"(?i)\b(?:iex|invoke-expression)\b.*\b(?:downloadstring|downloadfile|downloaddata)\b").unwrap(),
+            message: "PowerShell iex + DownloadString/DownloadFile runs remote code. Review the source first.",
             decision: Decision::Ask,
             except: None,
         },
@@ -735,6 +1099,13 @@ mod tests {
         assert!(blocked("pnpm add -D vitest"));
         assert!(blocked("yarn add react"));
         assert!(blocked("yarn add -D @types/react"));
+        assert!(blocked("yarn global add typescript"));
+        assert!(blocked("yarn install -g hack"));
+        assert!(blocked("bun install lodash"));
+        assert!(blocked("bun i react"));
+        assert!(blocked("bun add -d vitest"));
+        assert!(blocked("bun add -g typescript"));
+        assert!(blocked("bun install -g hack"));
     }
 
     #[test]
@@ -750,6 +1121,9 @@ mod tests {
         assert!(!blocked("yarn"));
         assert!(!blocked("yarn install"));
         assert!(!blocked("yarn install --frozen-lockfile"));
+        assert!(!blocked("bun install"));
+        assert!(!blocked("bun i"));
+        assert!(!blocked("bun install --frozen-lockfile"));
     }
 
     #[test]
@@ -786,6 +1160,192 @@ mod tests {
         assert!(!blocked("go test ./..."));
         assert!(!blocked("go run main.go"));
         assert!(!blocked("go mod tidy"));
+    }
+
+    #[test]
+    fn asks_on_python_extras() {
+        assert!(blocked("conda install numpy"));
+        assert!(blocked("conda install -n myenv numpy"));
+        assert!(blocked("mamba install pandas"));
+        assert!(blocked("pdm add httpx"));
+        assert!(blocked("rye add httpx"));
+        assert!(blocked("easy_install Django"));
+    }
+
+    #[test]
+    fn asks_on_js_extras() {
+        assert!(blocked("deno install -A https://deno.land/x/foo/cli.ts"));
+        assert!(blocked("deno install npm:lodash"));
+        assert!(blocked("deno add jsr:@std/path"));
+        assert!(!blocked("deno install"));
+        assert!(!blocked("deno run main.ts"));
+        assert!(blocked("volta install node@18"));
+    }
+
+    #[test]
+    fn asks_on_ruby_extras() {
+        assert!(blocked("bundle add rspec"));
+    }
+
+    #[test]
+    fn asks_on_dotnet_installs() {
+        assert!(blocked("dotnet tool install -g dotnet-ef"));
+        assert!(blocked("dotnet tool install --global dotnet-ef"));
+        assert!(blocked("dotnet add package Newtonsoft.Json"));
+        assert!(blocked("nuget install Foo"));
+        assert!(!blocked("dotnet build"));
+        assert!(!blocked("dotnet test"));
+    }
+
+    #[test]
+    fn asks_on_php_installs() {
+        assert!(blocked("composer require guzzlehttp/guzzle"));
+        assert!(blocked("composer global require phpunit/phpunit"));
+        assert!(blocked("pecl install redis"));
+        assert!(blocked("pear install HTTP_Request2"));
+    }
+
+    #[test]
+    fn asks_on_jvm_installs() {
+        assert!(blocked("sdk install java 17.0.1-tem"));
+        assert!(blocked("jbang app install myapp@user"));
+        assert!(blocked("cs install scalafmt"));
+    }
+
+    #[test]
+    fn asks_on_haskell_installs() {
+        assert!(blocked("cabal install pandoc"));
+        assert!(blocked("stack install hlint"));
+        assert!(blocked("ghcup install ghc 9.6.3"));
+    }
+
+    #[test]
+    fn asks_on_other_lang_installs() {
+        assert!(blocked("opam install dune"));
+        assert!(blocked("mix archive.install hex phx_new"));
+        assert!(blocked("mix escript.install hex ex_doc"));
+        assert!(blocked("luarocks install busted"));
+        assert!(blocked("cpanm Moose"));
+        assert!(blocked("cpan install Moose"));
+        assert!(blocked("cpan -i Moose"));
+        assert!(blocked("nimble install jester"));
+        assert!(blocked("dart pub add http"));
+        assert!(blocked("flutter pub add http"));
+        assert!(blocked("dart pub global activate stagehand"));
+        assert!(blocked("mint install realm/SwiftLint"));
+        assert!(blocked("vcpkg install fmt"));
+        assert!(blocked("conan install ."));
+        assert!(blocked("cargo binstall ripgrep"));
+    }
+
+    #[test]
+    fn asks_on_os_package_managers() {
+        assert!(blocked("port install wget"));
+        assert!(blocked("sudo port install wget"));
+        assert!(blocked("apk add curl"));
+        assert!(blocked("sudo apk add curl"));
+        assert!(blocked("zypper install curl"));
+        assert!(blocked("zypper in curl"));
+        assert!(blocked("emerge app-editors/vim"));
+        assert!(blocked("emerge -av app-editors/vim"));
+        assert!(!blocked("emerge --sync"));
+        assert!(!blocked("emerge --info"));
+        assert!(blocked("xbps-install -S curl"));
+        assert!(blocked("snap install code --classic"));
+        assert!(blocked("flatpak install flathub org.mozilla.firefox"));
+        assert!(blocked("choco install git"));
+        assert!(blocked("scoop install git"));
+        assert!(blocked("winget install Microsoft.PowerToys"));
+    }
+
+    #[test]
+    fn asks_on_version_manager_installs() {
+        assert!(blocked("asdf install nodejs 20.0.0"));
+        assert!(blocked("mise install node@20"));
+        assert!(blocked("pyenv install 3.11.4"));
+        assert!(blocked("nvm install 20"));
+        assert!(blocked("rbenv install 3.2.2"));
+        assert!(blocked("fnm install 20"));
+        assert!(!blocked("asdf install"));
+        assert!(!blocked("mise install"));
+    }
+
+    #[test]
+    fn asks_on_misc_installs() {
+        assert!(blocked("gh extension install dlvhdr/gh-dash"));
+        assert!(blocked("code --install-extension ms-python.python"));
+    }
+
+    #[test]
+    fn asks_on_curl_pipe_shell() {
+        assert!(blocked("curl -fsSL https://bun.sh/install | bash"));
+        assert!(blocked("curl -sSf https://sh.rustup.rs | sh"));
+        assert!(blocked("curl -fsSL https://get.docker.com | sudo bash"));
+        assert!(blocked("curl URL | bash -s -- --version"));
+        assert!(blocked("wget -qO- https://get.docker.com | sh"));
+        assert!(blocked("wget -O - https://example.com/install.sh | zsh"));
+    }
+
+    #[test]
+    fn asks_on_process_substitution_fetch() {
+        assert!(blocked("bash <(curl -s https://example.com/install.sh)"));
+        assert!(blocked("zsh <(wget -qO- https://example.com/install.sh)"));
+        assert!(blocked("sh <( curl https://example.com/x.sh )"));
+    }
+
+    #[test]
+    fn asks_on_command_substitution_fetch() {
+        assert!(blocked(
+            "sh -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        ));
+        assert!(blocked("bash -c \"$(curl -fsSL https://example.com/x.sh)\""));
+        assert!(blocked("bash -e -c \"$(curl URL)\""));
+    }
+
+    #[test]
+    fn asks_on_eval_fetch() {
+        assert!(blocked("eval \"$(curl -s https://example.com/env.sh)\""));
+        assert!(blocked("eval $(wget -qO- https://example.com/env.sh)"));
+    }
+
+    #[test]
+    fn asks_on_source_fetch() {
+        assert!(blocked("source <(curl -s https://example.com/completion.sh)"));
+        assert!(blocked(". <(curl -s https://example.com/completion.sh)"));
+    }
+
+    #[test]
+    fn asks_on_curl_pipe_interpreter() {
+        assert!(blocked("curl -sSL https://example.com/install.py | python"));
+        assert!(blocked("curl -sSL https://example.com/x.py | python3"));
+        assert!(blocked("curl URL | python -"));
+        assert!(blocked("curl URL | perl"));
+        assert!(blocked("curl URL | ruby"));
+        assert!(blocked("wget -qO- URL | php"));
+    }
+
+    #[test]
+    fn asks_on_powershell_iex_fetch() {
+        assert!(blocked("iwr https://example.com/install.ps1 | iex"));
+        assert!(blocked("Invoke-WebRequest URL | Invoke-Expression"));
+        assert!(blocked("iex (iwr https://example.com/install.ps1)"));
+        assert!(blocked("iex(New-Object Net.WebClient).DownloadString('...')"));
+    }
+
+    #[test]
+    fn allows_benign_curl_and_pipes() {
+        assert!(!blocked("curl -o file.tar.gz https://example.com/file.tar.gz"));
+        assert!(!blocked("curl https://api.example.com/data"));
+        assert!(!blocked("wget https://example.com/file.zip"));
+        assert!(!blocked("curl https://api.example.com/data | jq ."));
+        assert!(!blocked("curl https://api.example.com/data | tee /tmp/out"));
+        assert!(!blocked("curl https://api.example.com/data | grep foo"));
+        assert!(!blocked("curl URL | python -m json.tool"));
+        assert!(!blocked("curl URL | python3 -m json.tool"));
+        assert!(!blocked("bash script.sh"));
+        assert!(!blocked("source ~/.bashrc"));
+        assert!(!blocked(". venv/bin/activate"));
+        assert!(!blocked("echo hi | bash"));
     }
 
     #[test]
